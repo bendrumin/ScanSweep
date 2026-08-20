@@ -102,6 +102,11 @@ final class ScanModel {
 
     func cancelScan() {
         scanTask?.cancel()
+        // Jump straight to whatever has been found; never leave the user
+        // waiting on in-flight analysis to notice the cancellation.
+        if phase == .scanning {
+            phase = .results
+        }
     }
 
     private func scan() async {
@@ -285,7 +290,7 @@ enum PhotoAnalyzer {
             return nil
         }
         let (sharpness, brightness) = sharpnessAndBrightness(of: cgImage)
-        let aesthetics = aesthetics(for: cgImage)
+        let aesthetics = await aesthetics(for: cgImage)
         return PhotoRecord(
             id: asset.localIdentifier,
             asset: asset,
@@ -367,12 +372,45 @@ enum PhotoAnalyzer {
         return (variance, brightness)
     }
 
-    nonisolated private static func aesthetics(for cgImage: CGImage) -> (score: Float, isUtility: Bool)? {
-        let request = VNCalculateImageAestheticsScoresRequest()
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        try? handler.perform([request])
-        guard let observation = request.results?.first else { return nil }
-        return (observation.overallScore, observation.isUtility)
+    /// Vision's synchronous `perform` must never run on the Swift-concurrency
+    /// cooperative pool: on the simulator the aesthetics model never completes,
+    /// which would starve every pool thread and hang the whole scan. It runs on
+    /// a GCD queue with a deadline instead, and is skipped entirely on the
+    /// simulator — the Laplacian and brightness checks still work there.
+    nonisolated private static func aesthetics(for cgImage: CGImage) async -> (score: Float, isUtility: Bool)? {
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        final class ResumeOnce: @unchecked Sendable {
+            private let lock = NSLock()
+            private var resumed = false
+            func claim() -> Bool {
+                lock.lock()
+                defer { lock.unlock() }
+                if resumed { return false }
+                resumed = true
+                return true
+            }
+        }
+        let once = ResumeOnce()
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let request = VNCalculateImageAestheticsScoresRequest()
+                let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                try? handler.perform([request])
+                let result: (score: Float, isUtility: Bool)? = request.results?.first
+                    .map { ($0.overallScore, $0.isUtility) }
+                if once.claim() {
+                    continuation.resume(returning: result)
+                }
+            }
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
+                if once.claim() {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+        #endif
     }
 }
 
