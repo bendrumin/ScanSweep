@@ -1,0 +1,5 @@
+app_identifier "com.bensiegel.SnapSweep"
+team_id "5ANRA6JZC2"
+
+# Authentication uses an App Store Connect API key (see Fastfile) rather than
+# an Apple ID, which avoids 2FA prompts entirely.

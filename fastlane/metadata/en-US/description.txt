@@ -1,0 +1,19 @@
+Your kids grabbed your phone. Now your camera roll has 87 photos of the carpet, a thumb, and the dog's left ear — all beautifully out of focus.
+
+SnapSweep finds them in seconds, so you don't have to scroll for an hour.
+
+HOW IT WORKS
+• Scan — SnapSweep analyzes every photo right on your iPhone, scoring sharpness and exposure and using Apple's on-device intelligence to spot accidental shots.
+• Review — flagged photos appear in one grid, sorted worst-first, with a badge explaining why each one was flagged. A strictness slider lets you tune how picky it is, and you can preview any photo full screen before deciding.
+• Clean up — delete the junk in one pass, or file it into a "SnapSweep Flagged" album to deal with later.
+
+BUILT-IN SAFETY NETS
+• Nothing is deleted without the iOS system confirmation.
+• Everything you delete stays in Recently Deleted for 30 days, so you can always change your mind.
+• Prefer zero risk? Use "To Album" and nothing gets deleted at all.
+
+PRIVATE BY DESIGN
+• All analysis happens on your device.
+• No account, no ads, no analytics, no network calls. Your photos never leave your phone.
+
+SnapSweep is for every parent whose photo library doubles as a toddler's art project.

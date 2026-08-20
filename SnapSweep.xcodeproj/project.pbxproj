@@ -254,6 +254,7 @@
 				DEVELOPMENT_TEAM = 5ANRA6JZC2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SnapSweep;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "SnapSweep analyzes your photos on this device to find blurry and accidental shots, and needs access to show and delete the ones you choose. Photos never leave your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -285,6 +286,7 @@
 				DEVELOPMENT_TEAM = 5ANRA6JZC2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SnapSweep;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "SnapSweep analyzes your photos on this device to find blurry and accidental shots, and needs access to show and delete the ones you choose. Photos never leave your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
