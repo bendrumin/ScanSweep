@@ -9,7 +9,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 switch model.phase {
                 case .idle:
-                    IdleView(model: model)
+                    DashboardView(model: model)
                 case .scanning:
                     ScanningView(
                         scanned: model.scannedCount,

@@ -73,6 +73,53 @@ final class ScanModel {
     private var deselectedIDs: Set<String> = []
     private var scanTask: Task<Void, Never>?
 
+    // Lifetime + last-scan stats shown on the dashboard, persisted across launches.
+    private(set) var lifetimeCleanedCount: Int
+    private(set) var lifetimeBytesFreedEstimate: Double
+    private(set) var lastScanDate: Date?
+    private(set) var lastScanPhotoCount: Int
+    private(set) var lastScanFlaggedCount: Int
+
+    private static let cleanedCountKey = "lifetimeCleanedCount"
+    private static let bytesFreedKey = "lifetimeBytesFreedEstimate"
+    private static let lastScanDateKey = "lastScanDate"
+    private static let lastScanPhotosKey = "lastScanPhotoCount"
+    private static let lastScanFlaggedKey = "lastScanFlaggedCount"
+
+    init() {
+        let defaults = UserDefaults.standard
+        lifetimeCleanedCount = defaults.integer(forKey: Self.cleanedCountKey)
+        lifetimeBytesFreedEstimate = defaults.double(forKey: Self.bytesFreedKey)
+        lastScanDate = defaults.object(forKey: Self.lastScanDateKey) as? Date
+        lastScanPhotoCount = defaults.integer(forKey: Self.lastScanPhotosKey)
+        lastScanFlaggedCount = defaults.integer(forKey: Self.lastScanFlaggedKey)
+    }
+
+    private func persistStats() {
+        let defaults = UserDefaults.standard
+        defaults.set(lifetimeCleanedCount, forKey: Self.cleanedCountKey)
+        defaults.set(lifetimeBytesFreedEstimate, forKey: Self.bytesFreedKey)
+        defaults.set(lastScanDate, forKey: Self.lastScanDateKey)
+        defaults.set(lastScanPhotoCount, forKey: Self.lastScanPhotosKey)
+        defaults.set(lastScanFlaggedCount, forKey: Self.lastScanFlaggedKey)
+    }
+
+    /// "Last scan flagged" keeps the scan-time count set in scan() — the
+    /// dashboard's remaining-to-review hint reads the live flagged list instead.
+    func finishReview() {
+        phase = .idle
+    }
+
+    /// From the dashboard's "still to review" hint: reopen the in-memory
+    /// results if this session still has them, otherwise run a fresh scan.
+    func reviewLastResults() {
+        if flagged.isEmpty {
+            requestAccessAndScan()
+        } else {
+            phase = .results
+        }
+    }
+
     var scannedPhotoCount: Int { records.count }
     var selectedCount: Int { selectedIDs.count }
 
@@ -142,6 +189,10 @@ final class ScanModel {
         }
 
         phase = .results
+        lastScanDate = Date()
+        lastScanPhotoCount = records.count
+        lastScanFlaggedCount = flagged.count
+        persistStats()
     }
 
     private func recomputeFlagged() {
@@ -217,6 +268,12 @@ final class ScanModel {
                 }
                 let deletedIDs = Set(toDelete.map(\.id))
                 records.removeAll { deletedIDs.contains($0.id) }
+                lifetimeCleanedCount += toDelete.count
+                // ~2 bits per pixel is a conservative average for HEIC/JPEG originals.
+                lifetimeBytesFreedEstimate += toDelete.reduce(0.0) {
+                    $0 + Double($1.asset.pixelWidth * $1.asset.pixelHeight) * 0.25
+                }
+                persistStats()
                 lastActionSummary = "Deleted \(toDelete.count) photos. They'll stay in Recently Deleted for 30 days if you change your mind."
             } catch {
                 reportError(error)

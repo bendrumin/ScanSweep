@@ -29,6 +29,11 @@ struct ResultsView: View {
             )
         }
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Done") {
+                    model.finishReview()
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("Rescan", systemImage: "arrow.clockwise") {
                     model.startScan()
