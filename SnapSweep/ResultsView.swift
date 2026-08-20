@@ -55,7 +55,7 @@ struct ResultsHeader: View {
         VStack(spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(flaggedCount) suspect photos")
+                    Text("^[\(flaggedCount) suspect photo](inflect: true)")
                         .font(.headline)
                     Text("out of \(scannedCount) scanned · \(selectedCount) selected")
                         .font(.caption)
@@ -306,7 +306,7 @@ struct ActionBar: View {
             }
             .buttonStyle(.bordered)
             Button(role: .destructive, action: onDelete) {
-                Label("Delete \(selectedCount)", systemImage: "trash")
+                Label(selectedCount > 0 ? "Delete \(selectedCount)" : "Delete", systemImage: "trash")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
