@@ -1,0 +1,21 @@
+NEW IN THIS BUILD: near-duplicate detection.
+
+If someone holds the shutter down, you get a dozen near-identical shots. Those are
+sharp and well exposed, so the blur and brightness checks never caught them. This
+build groups them, keeps the sharpest frame, and flags the rest as "Repeat shot".
+
+Worth trying:
+• Run it on your largest library — that is where repeats show up.
+• Check the repeat groups. The sharpest of each group is kept and never flagged;
+  the results screen says so above the grid. Tell us if it ever picks a worse frame.
+• Drag the Strictness slider. It now tunes duplicate matching too.
+• The scanning screen and the dashboard were both redesigned.
+
+Known limits:
+• Bursts spread over more than three minutes are not grouped yet.
+• Very dark or blown-out frames are deliberately excluded from duplicate matching —
+  they have too little detail to compare safely — so they are only caught by the
+  brightness checks.
+
+Please report anything flagged that you would have kept. False flags matter more to
+us than missed junk. Deleting is always your call and stays undoable for 30 days.

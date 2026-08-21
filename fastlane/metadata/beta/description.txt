@@ -1,0 +1,8 @@
+SnapSweep finds the junk in your camera roll — the blurry shots, the ones taken in a
+pocket, the too-dark and blown-out frames, and the bursts where the same photo was
+taken eight times in a row. Everything is analyzed on your device; no photos are
+uploaded and there is no account.
+
+Flagged photos appear in one grid with a badge explaining each flag. You choose what
+happens: delete them (they sit in Recently Deleted for 30 days), or file them to a
+"SnapSweep Flagged" album without deleting anything.

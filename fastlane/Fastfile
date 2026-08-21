@@ -89,6 +89,130 @@ platform :ios do
     UI.important("External testers can only install once a build passes Beta App Review.")
   end
 
+  desc "Show what Beta App Review still needs before an external build can ship:"
+  desc "reviewer contact details, the app-level description, and What to Test."
+  lane :beta_review_status do
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
+    app = Spaceship::ConnectAPI::App.find(
+      CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    )
+
+    detail = Spaceship::ConnectAPI.get_beta_app_review_detail(
+      filter: { app: app.id }
+    ).to_models.first
+    UI.important("Beta App Review contact")
+    if detail.nil?
+      UI.message("   (no betaAppReviewDetail record yet)")
+    else
+      %w[contact_first_name contact_last_name contact_phone contact_email].each do |field|
+        value = detail.send(field)
+        state = (value.nil? || value.to_s.empty?) ? "MISSING" : value
+        UI.message("   #{field}: #{state}")
+      end
+      UI.message("   demo_account_required: #{detail.demo_account_required.inspect}")
+    end
+
+    UI.important("App-level beta description (per locale)")
+    app.get_beta_app_localizations.each do |loc|
+      desc = loc.description.to_s.empty? ? "MISSING" : "#{loc.description[0, 60]}…"
+      UI.message("   #{loc.locale}: #{desc}")
+      UI.message("      feedback email: #{loc.feedback_email.inspect}")
+    end
+
+    build = Spaceship::ConnectAPI::Build.all(
+      app_id: app.id, sort: "-version", limit: 1,
+      includes: "betaAppReviewSubmission,betaBuildLocalizations"
+    ).first
+    UI.important("Newest build: #{build.version}")
+    UI.message("   review state: #{build.beta_app_review_submission&.beta_review_state || 'not submitted'}")
+    build.get_beta_build_localizations.each do |loc|
+      whats_new = loc.whats_new.to_s.empty? ? "MISSING" : "#{loc.whats_new[0, 60]}…"
+      UI.message("   what to test (#{loc.locale}): #{whats_new}")
+    end
+  end
+
+  desc "Fill in the tester-facing TestFlight text: the app-level beta description"
+  desc "and the newest build's What to Test. Needs no personal details."
+  lane :beta_test_info do
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
+    app = Spaceship::ConnectAPI::App.find(
+      CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    )
+
+    description = File.read("metadata/beta/description.txt").strip
+    whats_new = File.read("metadata/beta/whats_new.txt").strip
+    feedback_email = File.read("metadata/beta/feedback_email.txt").strip
+
+    existing = app.get_beta_app_localizations.find { |l| l.locale == "en-US" }
+    attributes = { description: description, feedbackEmail: feedback_email }
+    if existing
+      Spaceship::ConnectAPI.patch_beta_app_localizations(
+        localization_id: existing.id, attributes: attributes
+      )
+      UI.message("Updated app-level beta description (en-US)")
+    else
+      Spaceship::ConnectAPI.post_beta_app_localizations(
+        app_id: app.id, attributes: attributes.merge(locale: "en-US")
+      )
+      UI.message("Created app-level beta description (en-US)")
+    end
+
+    build = Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-version", limit: 1).first
+    UI.user_error!("No build found") if build.nil?
+    loc = build.get_beta_build_localizations.find { |l| l.locale == "en-US" }
+    if loc
+      Spaceship::ConnectAPI.patch_beta_build_localizations(
+        localization_id: loc.id, attributes: { whatsNew: whats_new }
+      )
+      UI.message("Updated What to Test for build #{build.version}")
+    else
+      Spaceship::ConnectAPI.post_beta_build_localizations(
+        build_id: build.id, attributes: { whatsNew: whats_new, locale: "en-US" }
+      )
+      UI.message("Created What to Test for build #{build.version}")
+    end
+    UI.success("Tester-facing text is set. Contact details still needed — see beta_submit.")
+  end
+
+  desc "Set the Beta App Review contact details and submit the newest build for"
+  desc "review. Apple requires all four: first_name, last_name, phone, email."
+  desc "e.g. fastlane ios beta_submit first_name:Ben last_name:Siegel phone:+15551234567 email:you@example.com"
+  lane :beta_submit do |options|
+    %i[first_name last_name phone email].each do |key|
+      UI.user_error!("Missing required option: #{key}") if options[key].to_s.empty?
+    end
+
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
+    app = Spaceship::ConnectAPI::App.find(
+      CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    )
+
+    Spaceship::ConnectAPI.patch_beta_app_review_detail(
+      app_id: app.id,
+      attributes: {
+        contactFirstName: options[:first_name],
+        contactLastName: options[:last_name],
+        contactPhone: options[:phone],
+        contactEmail: options[:email],
+        # SnapSweep has no accounts — reviewers just need their own photo library.
+        demoAccountRequired: false,
+        notes: File.read("metadata/beta/review_notes.txt").strip
+      }
+    )
+    UI.message("Beta App Review contact saved.")
+
+    build = Spaceship::ConnectAPI::Build.all(
+      app_id: app.id, sort: "-version", limit: 1, includes: "betaAppReviewSubmission"
+    ).first
+    state = build.beta_app_review_submission&.beta_review_state
+    if state && state != "REJECTED"
+      UI.important("Build #{build.version} is already submitted (#{state}) — nothing to do.")
+    else
+      Spaceship::ConnectAPI.post_beta_app_review_submissions(build_id: build.id)
+      UI.success("Submitted build #{build.version} for Beta App Review.")
+    end
+  end
+
   desc "Create (or reuse) an external TestFlight group with an open public join"
   desc "link, attach the newest build, and print the URL for the website."
   lane :testflight_public_link do

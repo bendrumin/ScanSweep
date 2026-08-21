@@ -1,0 +1,12 @@
+SnapSweep needs full Photo Library access because it scans the whole library for
+low-quality and duplicate photos, and carries out the deletions and album changes the
+user explicitly confirms.
+
+No account or sign-in is required. To exercise the app on a review device: open it,
+tap "Scan My Library", grant photo access, and the results grid appears when the scan
+finishes. Any photo library works; a library containing some blurry or repeated shots
+shows the most.
+
+All analysis is on-device (Core Graphics and the Vision framework). The app makes no
+network requests and collects no data. Deletions go through the standard PHPhotoLibrary
+confirmation sheet and remain recoverable in Recently Deleted for 30 days.

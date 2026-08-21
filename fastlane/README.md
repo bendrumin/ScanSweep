@@ -43,6 +43,38 @@ is the check after any screenshot push.
 
 Report the TestFlight beta groups and any public (open) join link.
 
+### ios beta_review_status
+
+```sh
+[bundle exec] fastlane ios beta_review_status
+```
+
+Show what Beta App Review still needs before an external build can ship:
+
+reviewer contact details, the app-level description, and What to Test.
+
+### ios beta_test_info
+
+```sh
+[bundle exec] fastlane ios beta_test_info
+```
+
+Fill in the tester-facing TestFlight text: the app-level beta description
+
+and the newest build's What to Test. Needs no personal details.
+
+### ios beta_submit
+
+```sh
+[bundle exec] fastlane ios beta_submit
+```
+
+Set the Beta App Review contact details and submit the newest build for
+
+review. Apple requires all four: first_name, last_name, phone, email.
+
+e.g. fastlane ios beta_submit first_name:Ben last_name:Siegel phone:+15551234567 email:you@example.com
+
 ### ios testflight_public_link
 
 ```sh
