@@ -61,7 +61,9 @@ reviewer contact details, the app-level description, and What to Test.
 
 Fill in the tester-facing TestFlight text: the app-level beta description
 
-and the newest build's What to Test. Needs no personal details.
+and the newest build's What to Test.
+
+e.g. fastlane ios beta_test_info feedback_email:you@example.com
 
 ### ios beta_submit
 

@@ -132,8 +132,14 @@ platform :ios do
   end
 
   desc "Fill in the tester-facing TestFlight text: the app-level beta description"
-  desc "and the newest build's What to Test. Needs no personal details."
-  lane :beta_test_info do
+  desc "and the newest build's What to Test."
+  desc "e.g. fastlane ios beta_test_info feedback_email:you@example.com"
+  lane :beta_test_info do |options|
+    # Passed in rather than committed: this repo is public, and the address is
+    # only meant to be seen by beta testers, not scraped off GitHub.
+    feedback_email = options[:feedback_email].to_s
+    UI.user_error!("Missing required option: feedback_email") if feedback_email.empty?
+
     Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
     app = Spaceship::ConnectAPI::App.find(
       CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
@@ -141,7 +147,6 @@ platform :ios do
 
     description = File.read("metadata/beta/description.txt").strip
     whats_new = File.read("metadata/beta/whats_new.txt").strip
-    feedback_email = File.read("metadata/beta/feedback_email.txt").strip
 
     existing = app.get_beta_app_localizations.find { |l| l.locale == "en-US" }
     attributes = { description: description, feedbackEmail: feedback_email }
