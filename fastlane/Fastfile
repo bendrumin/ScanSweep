@@ -25,6 +25,73 @@ platform :ios do
     precheck(api_key: asc_api_key, include_in_app_purchases: false)
   end
 
+  desc "List the screenshots actually live on App Store Connect, per locale and"
+  desc "device size. deliver's upload retry can leave duplicates behind, so this"
+  desc "is the check after any screenshot push."
+  lane :screenshot_audit do
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
+    app = Spaceship::ConnectAPI::App.find(
+      CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    )
+    version = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+    UI.user_error!("No editable version on App Store Connect") if version.nil?
+    UI.important("Editable version: #{version.version_string} (#{version.app_store_state})")
+
+    total = 0
+    duplicates = []
+    version.get_app_store_version_localizations.each do |loc|
+      loc.get_app_screenshot_sets.each do |set|
+        names = set.app_screenshots.map(&:file_name).sort
+        total += names.count
+        UI.message("#{loc.locale} / #{set.screenshot_display_type}: #{names.count} screenshot(s)")
+        names.each { |n| UI.message("    #{n}") }
+        repeated = names.tally.select { |_, count| count > 1 }
+        repeated.each do |name, count|
+          duplicates << "#{loc.locale}/#{set.screenshot_display_type}: #{name} x#{count}"
+        end
+      end
+    end
+
+    if duplicates.empty?
+      UI.success("No duplicate screenshots. #{total} total.")
+    else
+      UI.error("Duplicates found:")
+      duplicates.each { |d| UI.error("  #{d}") }
+    end
+  end
+
+  desc "Delete duplicate screenshots left behind by a deliver upload retry,"
+  desc "keeping one complete copy of each filename and restoring filename order."
+  lane :screenshot_dedupe do
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
+    app = Spaceship::ConnectAPI::App.find(
+      CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    )
+    version = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+    UI.user_error!("No editable version on App Store Connect") if version.nil?
+
+    removed = 0
+    version.get_app_store_version_localizations.each do |loc|
+      loc.get_app_screenshot_sets.each do |set|
+        keepers = {}
+        set.app_screenshots.group_by(&:file_name).each do |name, shots|
+          # Prefer a copy App Store Connect finished processing.
+          sorted = shots.sort_by { |s| s.complete? ? 0 : 1 }
+          keepers[name] = sorted.first
+          sorted.drop(1).each do |dupe|
+            UI.message("#{loc.locale}/#{set.screenshot_display_type}: deleting duplicate #{name} (#{dupe.id})")
+            dupe.delete!
+            removed += 1
+          end
+        end
+        ordered = keepers.keys.sort.map { |n| keepers[n].id }
+        set.reorder_screenshots(app_screenshot_ids: ordered)
+        UI.message("#{loc.locale}/#{set.screenshot_display_type}: kept #{ordered.count} — #{keepers.keys.sort.join(', ')}")
+      end
+    end
+    UI.success("Removed #{removed} duplicate screenshot(s).")
+  end
+
   desc "Upload metadata and screenshots to App Store Connect. No binary."
   desc "Options: force:true skips the HTML preview; skip_screenshots:true for text only."
   lane :metadata do |options|

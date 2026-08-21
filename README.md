@@ -54,3 +54,25 @@ xcrun simctl launch "iPhone 17 Pro" com.bensiegel.SnapSweep
   more borderline shots, lower it to only catch hopeless ones.
 - Brightness cutoffs (`< 0.06` too dark, `> 0.97` blown out) and the Vision
   junk-score cutoff (`< -0.6`) live in the same function.
+
+## App Store screenshots
+
+The 6.9" (1320x2868) marketing screenshots in `fastlane/screenshots/en-US` are built
+from raw simulator captures by `tools/frame-screenshot.swift`, which applies the shared
+purple frame, headline, and subhead measured off the original hand-made set:
+
+```sh
+swift tools/make-sample-photos.swift /tmp/samples     # synthetic stand-in "bad" photos
+xcrun simctl addmedia <device> /tmp/samples/*.jpg
+xcrun simctl io <device> screenshot /tmp/raw.png      # must be an iPhone 17 Pro Max
+swift tools/frame-screenshot.swift /tmp/raw.png "Headline" "Subhead" \
+  fastlane/screenshots/en-US/0N_name.png
+```
+
+Screenshots upload with `fastlane ios metadata`. **Always follow that with
+`fastlane ios screenshot_audit`** — when App Store Connect is slow to index an upload,
+`deliver` reports the files as missing and retries, and the retry leaves a second copy
+of every screenshot on the listing. `fastlane ios screenshot_dedupe` cleans that up.
+
+Note `fastlane/README.md` is regenerated on every fastlane run, so it is not a place to
+put notes like these.
