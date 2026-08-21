@@ -15,6 +15,7 @@ struct ContentView: View {
                         scanned: model.scannedCount,
                         total: model.totalCount,
                         flaggedSoFar: model.flagged.count,
+                        worstSoFar: Array(model.flagged.prefix(5)),
                         onCancel: { model.cancelScan() }
                     )
                 case .results:
@@ -133,36 +134,6 @@ struct AccessDeniedFooter: View {
             }
             .buttonStyle(.borderedProminent)
         }
-    }
-}
-
-struct ScanningView: View {
-    let scanned: Int
-    let total: Int
-    let flaggedSoFar: Int
-    let onCancel: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            ProgressView(value: Double(scanned), total: Double(max(total, 1))) {
-                Text("Scanning your library…")
-                    .font(.headline)
-            } currentValueLabel: {
-                Text("\(scanned) of \(total) photos")
-            }
-            .padding(.horizontal, 32)
-            Text("\(flaggedSoFar) suspect photos so far")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .contentTransition(.numericText())
-                .animation(.default, value: flaggedSoFar)
-            Spacer()
-            Button("Stop and Review What's Found", role: .cancel, action: onCancel)
-                .buttonStyle(.bordered)
-                .padding(.bottom)
-        }
-        .padding()
     }
 }
 
