@@ -16,7 +16,7 @@ enum Diagnostics {
         )
         let formatter = ISO8601DateFormatter()
 
-        var lines = ["index,id,created,width,height,brightness,dynamicRange,sharpness,aesthetic,isUtility,hash,cluster,reasons"]
+        var lines = ["index,id,created,width,height,brightness,dynamicRange,sharpness,aesthetic,isUtility,hasPrint,cluster,reasons"]
         lines.reserveCapacity(records.count + 1)
 
         for (index, record) in records.enumerated() {
@@ -34,7 +34,7 @@ enum Diagnostics {
                 String(format: "%.2f", record.sharpness),
                 aesthetic,
                 record.isUtility ? "1" : "0",
-                "\(record.hash)",
+                record.featurePrint == nil ? "0" : "1",
                 hit?.clusterID.map(String.init) ?? "",
                 hit.map { $0.reasons.map(\.rawValue).joined(separator: ";") } ?? ""
             ]

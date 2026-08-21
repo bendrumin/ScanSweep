@@ -47,9 +47,11 @@ struct PhotoRecord: Equatable {
     let dynamicRange: Double
     let aestheticScore: Float?
     let isUtility: Bool
-    /// 64-bit difference hash; 0 means hashing failed and the record is
-    /// excluded from duplicate matching rather than matching everything.
-    let hash: UInt64
+    /// Vision's perceptual embedding. A difference hash was tried first and
+    /// could not do this job: once the camera drifts between frames its
+    /// same-burst distances overlap its unrelated-photo distances outright,
+    /// so no threshold separates them. Feature prints stay well apart.
+    let featurePrint: VNFeaturePrintObservation?
     let creationDate: Date?
 }
 
@@ -302,19 +304,30 @@ final class ScanModel {
     /// cluster; plus the sharpest member of each cluster (the one worth
     /// keeping) and the worst sharpness in it (used for grid ordering).
     private func duplicateClusters() -> ([Int?], [Int: Int], [Int: Double]) {
-        // Hamming distance across a 64-bit hash. Measured on real burst shots,
-        // same-burst pairs land at 1-6 and unrelated photos at 24+, so this
-        // 6-14 range sits inside a wide gap rather than on a cliff.
-        let threshold = Int((6.0 + sensitivity * 8.0).rounded())
-        let maxGap: TimeInterval = 180
-        let lookBack = 24
+        // Vision feature-print distance. Measured across bursts where the
+        // camera drifts hard between frames: same-burst pairs land at 0.21-0.32
+        // and unrelated photos at 0.60-1.00, so this range stays inside that
+        // gap. (A difference hash was tried first and scored 14-27 vs 26-35 on
+        // the same set — overlapping, so no threshold could work.)
+        let threshold = Float(0.32 + sensitivity * 0.20)
+        // These are rarely camera bursts — more often a kid taking the same
+        // photo over and over across a few minutes — so the window has to span
+        // a whole session, not a shutter hold. Chaining means only the gap
+        // between *consecutive* shots has to stay under this.
+        let maxGap: TimeInterval = 900
+        let lookBack = 40
+        // A near-black or blown-out frame has almost nothing for the model to
+        // describe, so unrelated ones can embed close together. They are caught
+        // by the exposure checks anyway; keep them out of duplicate matching.
+        let minRangeToMatch = 0.10
 
         var clusterOf = [Int?](repeating: nil, count: records.count)
         var nextCluster = 0
 
         for i in records.indices {
             let current = records[i]
-            guard current.hash != 0 else { continue }
+            guard let currentPrint = current.featurePrint,
+                  current.dynamicRange >= minRangeToMatch else { continue }
             var j = i - 1
             let stop = max(0, i - lookBack)
             while j >= stop {
@@ -323,16 +336,20 @@ final class ScanModel {
                    b.timeIntervalSince(a) > maxGap {
                     break  // newest-first, so everything earlier is further away
                 }
-                if candidate.hash != 0,
-                   (current.hash ^ candidate.hash).nonzeroBitCount <= threshold {
-                    if let existing = clusterOf[j] {
-                        clusterOf[i] = existing
-                    } else {
-                        clusterOf[j] = nextCluster
-                        clusterOf[i] = nextCluster
-                        nextCluster += 1
+                if let candidatePrint = candidate.featurePrint,
+                   candidate.dynamicRange >= minRangeToMatch {
+                    var distance = Float(0)
+                    try? currentPrint.computeDistance(&distance, to: candidatePrint)
+                    if distance <= threshold {
+                        if let existing = clusterOf[j] {
+                            clusterOf[i] = existing
+                        } else {
+                            clusterOf[j] = nextCluster
+                            clusterOf[i] = nextCluster
+                            nextCluster += 1
+                        }
+                        break
                     }
-                    break
                 }
                 j -= 1
             }
@@ -472,69 +489,20 @@ enum PhotoAnalyzer {
             return nil
         }
         let (sharpness, brightness, dynamicRange) = sharpnessAndBrightness(of: cgImage)
-        let aesthetics = await aesthetics(for: cgImage)
+        let vision = await visionAnalysis(for: cgImage)
         return PhotoRecord(
             id: asset.localIdentifier,
             asset: asset,
             sharpness: sharpness,
             brightness: brightness,
             dynamicRange: dynamicRange,
-            aestheticScore: aesthetics?.score,
-            isUtility: aesthetics?.isUtility ?? false,
-            hash: perceptualHash(of: cgImage),
+            aestheticScore: vision.score,
+            isUtility: vision.isUtility,
+            featurePrint: vision.featurePrint,
             creationDate: asset.creationDate
         )
     }
 
-    /// Difference hash: downsample to 9x8 grayscale and record, for each row,
-    /// whether every pixel is darker than the one to its right. That yields 64
-    /// bits describing the image's gradient structure — near-identical burst
-    /// shots differ in only a handful of them, while unrelated photos differ in
-    /// roughly half. Small shifts in framing and exposure barely move it, which
-    /// is exactly the "kid held the shutter down" case.
-    nonisolated static func perceptualHash(of cgImage: CGImage) -> UInt64 {
-        let width = 9, height = 8
-        var pixels = [UInt8](repeating: 0, count: width * height)
-        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
-            guard let context = CGContext(
-                data: buffer.baseAddress,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: width,
-                space: CGColorSpaceCreateDeviceGray(),
-                bitmapInfo: CGImageAlphaInfo.none.rawValue
-            ) else { return false }
-            context.interpolationQuality = .medium
-            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-            return true
-        }
-        guard drawn else { return 0 }
-
-        // A near-flat tile — an all-dark or blown-out frame — has almost no
-        // gradient to compare, so most bits come out zero and two unrelated
-        // photos can land within a few bits of each other by chance. Measured
-        // on deliberately low-contrast frames, distinct images stay 17+ apart
-        // once the tile spans at least this much range, but degenerate below
-        // it. False matches here would mean deleting real photos, so anything
-        // flatter opts out of duplicate matching entirely; it is still caught
-        // by the brightness and blur checks.
-        let low = pixels.min() ?? 0, high = pixels.max() ?? 0
-        guard high &- low >= 24 else { return 0 }
-
-        var hash: UInt64 = 0
-        var bit: UInt64 = 0
-        for y in 0..<height {
-            let row = y * width
-            for x in 0..<(width - 1) {
-                if pixels[row + x] < pixels[row + x + 1] {
-                    hash |= (1 << bit)
-                }
-                bit += 1
-            }
-        }
-        return hash
-    }
 
     nonisolated static func requestImage(for asset: PHAsset, targetSize: CGSize) async -> UIImage? {
         await withCheckedContinuation { continuation in
@@ -631,12 +599,14 @@ enum PhotoAnalyzer {
     /// Vision's synchronous `perform` must never run on the Swift-concurrency
     /// cooperative pool: on the simulator the aesthetics model never completes,
     /// which would starve every pool thread and hang the whole scan. It runs on
-    /// a GCD queue with a deadline instead, and is skipped entirely on the
-    /// simulator — the Laplacian and brightness checks still work there.
-    nonisolated private static func aesthetics(for cgImage: CGImage) async -> (score: Float, isUtility: Bool)? {
-        #if targetEnvironment(simulator)
-        return nil
-        #else
+    /// a GCD queue with a deadline instead.
+    ///
+    /// Both requests share one handler so the image is only decoded once.
+    /// Aesthetics is skipped on the simulator, where it hangs; feature prints
+    /// work there, so duplicate detection stays testable without a device.
+    nonisolated private static func visionAnalysis(
+        for cgImage: CGImage
+    ) async -> (score: Float?, isUtility: Bool, featurePrint: VNFeaturePrintObservation?) {
         final class ResumeOnce: @unchecked Sendable {
             private let lock = NSLock()
             private var resumed = false
@@ -649,24 +619,35 @@ enum PhotoAnalyzer {
             }
         }
         let once = ResumeOnce()
-        return await withCheckedContinuation { continuation in
+        typealias Result = (score: Float?, isUtility: Bool, featurePrint: VNFeaturePrintObservation?)
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Result, Never>) in
             DispatchQueue.global(qos: .utility).async {
-                let request = VNCalculateImageAestheticsScoresRequest()
+                let printRequest = VNGenerateImageFeaturePrintRequest()
+                var requests: [VNRequest] = [printRequest]
+
+                #if targetEnvironment(simulator)
+                let aestheticsRequest: VNCalculateImageAestheticsScoresRequest? = nil
+                #else
+                let aestheticsRequest: VNCalculateImageAestheticsScoresRequest? =
+                    VNCalculateImageAestheticsScoresRequest()
+                if let aestheticsRequest { requests.append(aestheticsRequest) }
+                #endif
+
                 let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                try? handler.perform([request])
-                let result: (score: Float, isUtility: Bool)? = request.results?.first
-                    .map { ($0.overallScore, $0.isUtility) }
-                if once.claim() {
-                    continuation.resume(returning: result)
-                }
+                try? handler.perform(requests)
+
+                let aesthetics = aestheticsRequest?.results?.first
+                let result: Result = (
+                    score: aesthetics?.overallScore,
+                    isUtility: aesthetics?.isUtility ?? false,
+                    featurePrint: printRequest.results?.first as? VNFeaturePrintObservation
+                )
+                if once.claim() { continuation.resume(returning: result) }
             }
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
-                if once.claim() {
-                    continuation.resume(returning: nil)
-                }
+                if once.claim() { continuation.resume(returning: (nil, false, nil)) }
             }
         }
-        #endif
     }
 }
 
