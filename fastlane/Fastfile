@@ -95,15 +95,21 @@ platform :ios do
   desc "Upload metadata and screenshots to App Store Connect. No binary."
   desc "Options: force:true skips the HTML preview; skip_screenshots:true for text only."
   lane :metadata do |options|
+    skip_screenshots = options.fetch(:skip_screenshots, false)
     deliver(
       api_key: asc_api_key,
       skip_binary_upload: true,
       skip_app_version_update: true,
-      skip_screenshots: options.fetch(:skip_screenshots, false),
+      skip_screenshots: skip_screenshots,
       overwrite_screenshots: true,
       force: options.fetch(:force, false),
       run_precheck_before_submit: false,
       precheck_include_in_app_purchases: false
     )
+    # deliver re-checks its own uploads before App Store Connect has indexed
+    # them, decides they failed, and retries — leaving a second copy of every
+    # screenshot behind. It still exits successfully, so clean up unconditionally
+    # rather than trusting the result.
+    screenshot_dedupe unless skip_screenshots
   end
 end

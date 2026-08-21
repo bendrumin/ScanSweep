@@ -69,10 +69,12 @@ swift tools/frame-screenshot.swift /tmp/raw.png "Headline" "Subhead" \
   fastlane/screenshots/en-US/0N_name.png
 ```
 
-Screenshots upload with `fastlane ios metadata`. **Always follow that with
-`fastlane ios screenshot_audit`** — when App Store Connect is slow to index an upload,
-`deliver` reports the files as missing and retries, and the retry leaves a second copy
-of every screenshot on the listing. `fastlane ios screenshot_dedupe` cleans that up.
+Screenshots upload with `fastlane ios metadata`, which then runs
+`screenshot_dedupe` automatically. That cleanup is not optional: when App Store Connect
+is slow to index an upload, `deliver` decides the files it just sent are missing and
+retries, and the retry leaves a second copy of every screenshot on the listing —
+while still exiting successfully. `fastlane ios screenshot_audit` reports what is
+actually live if you want to confirm.
 
 Note `fastlane/README.md` is regenerated on every fastlane run, so it is not a place to
 put notes like these.
