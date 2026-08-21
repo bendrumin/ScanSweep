@@ -73,8 +73,14 @@ enum Diagnostics {
     }
 
     /// Written to a temp file so `ShareLink` can hand it to AirDrop or Files.
-    static func write(records: [PhotoRecord], flagged: [FlaggedPhoto]) -> URL? {
-        let text = csv(records: records, flagged: flagged)
+    ///
+    /// Off the main actor: a full library means hundreds of thousands of
+    /// distance computations and tens of thousands of rows, which would freeze
+    /// the UI for seconds if built inline.
+    static func write(records: [PhotoRecord], flagged: [FlaggedPhoto]) async -> URL? {
+        let text = await Task.detached(priority: .userInitiated) {
+            csv(records: records, flagged: flagged)
+        }.value
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("snapsweep-scan.csv")
         do {
@@ -109,7 +115,7 @@ struct DiagnosticsShareButton: View {
         // regenerates this against the current results without recomputing it
         // on every chunk mid-scan.
         .task {
-            file = Diagnostics.write(
+            file = await Diagnostics.write(
                 records: model.debugRecords, flagged: model.flagged
             )
         }

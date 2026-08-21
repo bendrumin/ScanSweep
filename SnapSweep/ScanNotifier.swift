@@ -50,12 +50,16 @@ final class BackgroundScanAssertion {
 
     func begin() {
         guard taskID == .invalid else { return }
+        // A large library takes many minutes. Auto-lock would suspend the app
+        // and stall the scan partway, so hold the screen awake while it runs.
+        UIApplication.shared.isIdleTimerDisabled = true
         taskID = UIApplication.shared.beginBackgroundTask(withName: "SnapSweep scan") { [weak self] in
             self?.end()
         }
     }
 
     func end() {
+        UIApplication.shared.isIdleTimerDisabled = false
         guard taskID != .invalid else { return }
         UIApplication.shared.endBackgroundTask(taskID)
         taskID = .invalid
