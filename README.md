@@ -78,3 +78,37 @@ actually live if you want to confirm.
 
 Note `fastlane/README.md` is regenerated on every fastlane run, so it is not a place to
 put notes like these.
+
+## Mac support (validated, deferred to 1.1)
+
+A Mac Catalyst build was spiked and **works with zero source changes** — everything
+that looks iOS-only (`UIImage`, `UIApplication`, `Color(.systemGroupedBackground)`,
+`.navigationBarTitleDisplayMode`) is fine because Catalyst *is* UIKit on macOS. The
+analysis pipeline also compiles clean against the macOS SDK: PhotoKit, deletion via
+`performChanges`, `VNCalculateImageAestheticsScoresRequest`, and the perceptual hash
+all resolve.
+
+To enable it, add to both target configs:
+
+```
+SUPPORTS_MACCATALYST = YES;
+DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+```
+
+then build with `-destination 'platform=macOS,variant=Mac Catalyst'`.
+
+Two things the spike found that a compile alone would not have:
+
+1. **Photos access is denied without an entitlement.** The Catalyst build ships only
+   `com.apple.security.get-task-allow`, so `PHPhotoLibrary.authorizationStatus`
+   reports denied/restricted and the app boots into the "needs access" dead end. It
+   needs `com.apple.security.personal-information.photos-library`, plus App Sandbox
+   for App Store distribution.
+2. **The layout inflates.** At a 1024pt window the phone UI stretches — the footer
+   button spans the full width with large empty gutters. The views need max-width
+   constraints, and `FlaggedGrid` should use the extra width for more columns, which
+   is the main reason to want a Mac build at all.
+
+Note that iCloud Photos syncs deletions, so cleaning on iPhone already cleans the
+Mac. Mac support is an ergonomics win (reviewing a large flagged grid on a big
+display), not a coverage one.
