@@ -41,6 +41,10 @@ struct PhotoRecord: Equatable {
     let asset: PHAsset
     let sharpness: Double
     let brightness: Double
+    /// Tonal spread from the 1st to the 99th percentile. Separates a photo that
+    /// is dark because it was taken in a pocket from one that is dark because
+    /// the sky was — the second still has bright detail somewhere in the frame.
+    let dynamicRange: Double
     let aestheticScore: Float?
     let isUtility: Bool
     /// 64-bit difference hash; 0 means hashing failed and the record is
@@ -85,6 +89,7 @@ final class ScanModel {
     }
     private var deselectedIDs: Set<String> = []
     private var scanTask: Task<Void, Never>?
+    private let backgroundAssertion = BackgroundScanAssertion()
 
     // Lifetime + last-scan stats shown on the dashboard, persisted across launches.
     private(set) var lifetimeCleanedCount: Int
@@ -133,6 +138,11 @@ final class ScanModel {
         }
     }
 
+#if DEBUG
+    /// Debug-only window onto the raw metrics, for the diagnostics CSV.
+    var debugRecords: [PhotoRecord] { records }
+#endif
+
     var scannedPhotoCount: Int { records.count }
     var selectedCount: Int { selectedIDs.count }
 
@@ -157,7 +167,10 @@ final class ScanModel {
 
     func startScan() {
         scanTask?.cancel()
-        scanTask = Task { await scan() }
+        scanTask = Task {
+            await ScanNotifier.requestAuthorizationIfNeeded()
+            await scan()
+        }
     }
 
     func cancelScan() {
@@ -177,6 +190,8 @@ final class ScanModel {
         scannedCount = 0
         totalCount = 0
         phase = .scanning
+        backgroundAssertion.begin()
+        defer { backgroundAssertion.end() }
 
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
@@ -212,6 +227,14 @@ final class ScanModel {
         lastScanPhotoCount = records.count
         lastScanFlaggedCount = flagged.count
         persistStats()
+
+        // Only worth a notification if the scan actually ran to the end; a
+        // cancelled one means the user is already looking at the screen.
+        if !Task.isCancelled {
+            await ScanNotifier.notifyScanComplete(
+                flagged: flagged.count, scanned: records.count
+            )
+        }
     }
 
     private func recomputeFlagged() {
@@ -225,9 +248,17 @@ final class ScanModel {
 
         for (index, record) in records.enumerated() {
             var reasons: [FlagReason] = []
-            if record.brightness < 0.06 {
+            // Mean luminance alone condemns any deliberately dark photo — a night
+            // sky, a lit city, the aurora. What separates those from a pocket shot
+            // is that they still hold bright detail somewhere, so their tonal range
+            // stays wide while an accidental frame's collapses. Measured on both
+            // populations, accidents top out around 0.04 and keepers start near
+            // 0.42; this sits low in that gap because flagging a real photo is far
+            // worse than missing a junk one.
+            let hasRealTonalRange = record.dynamicRange > 0.15
+            if record.brightness < 0.06 && !hasRealTonalRange {
                 reasons.append(.tooDark)
-            } else if record.brightness > 0.97 {
+            } else if record.brightness > 0.97 && !hasRealTonalRange {
                 reasons.append(.tooBright)
             } else if record.sharpness < blurThreshold {
                 reasons.append(.blurry)
@@ -440,13 +471,14 @@ enum PhotoAnalyzer {
               let cgImage = image.cgImage else {
             return nil
         }
-        let (sharpness, brightness) = sharpnessAndBrightness(of: cgImage)
+        let (sharpness, brightness, dynamicRange) = sharpnessAndBrightness(of: cgImage)
         let aesthetics = await aesthetics(for: cgImage)
         return PhotoRecord(
             id: asset.localIdentifier,
             asset: asset,
             sharpness: sharpness,
             brightness: brightness,
+            dynamicRange: dynamicRange,
             aestheticScore: aesthetics?.score,
             isUtility: aesthetics?.isUtility ?? false,
             hash: perceptualHash(of: cgImage),
@@ -528,10 +560,10 @@ enum PhotoAnalyzer {
     /// Sharpness is the variance of a 4-neighbor Laplacian over a grayscale
     /// thumbnail; smooth (blurry) images have almost no edge response, so the
     /// variance collapses toward zero. Brightness is mean luminance in 0...1.
-    nonisolated private static func sharpnessAndBrightness(of cgImage: CGImage) -> (Double, Double) {
+    nonisolated static func sharpnessAndBrightness(of cgImage: CGImage) -> (sharpness: Double, brightness: Double, dynamicRange: Double) {
         let width = cgImage.width
         let height = cgImage.height
-        guard width > 2, height > 2 else { return (0, 0) }
+        guard width > 2, height > 2 else { return (0, 0, 0) }
 
         var pixels = [UInt8](repeating: 0, count: width * height)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
@@ -547,13 +579,34 @@ enum PhotoAnalyzer {
             context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }
-        guard drawn else { return (0, 0) }
+        guard drawn else { return (0, 0, 0) }
 
         var luminanceSum = 0.0
+        var histogram = [Int](repeating: 0, count: 256)
         for value in pixels {
             luminanceSum += Double(value)
+            histogram[Int(value)] += 1
         }
         let brightness = luminanceSum / Double(pixels.count) / 255.0
+
+        // Tonal spread between the 1st and 99th percentile. Percentiles rather
+        // than min/max so a few hot pixels or a single crushed shadow cannot
+        // make a flat frame look like it has detail.
+        let total = pixels.count
+        let lowCut = total / 100
+        let highCut = total - total / 100
+        var seen = 0
+        var low = 0, high = 255
+        for (value, count) in histogram.enumerated() {
+            seen += count
+            if seen > lowCut { low = value; break }
+        }
+        seen = 0
+        for (value, count) in histogram.enumerated() {
+            seen += count
+            if seen >= highCut { high = value; break }
+        }
+        let dynamicRange = Double(max(high - low, 0)) / 255.0
 
         var lapSum = 0.0
         var lapSquaredSum = 0.0
@@ -572,7 +625,7 @@ enum PhotoAnalyzer {
         let count = Double((width - 2) * (height - 2))
         let mean = lapSum / count
         let variance = lapSquaredSum / count - mean * mean
-        return (variance, brightness)
+        return (variance, brightness, dynamicRange)
     }
 
     /// Vision's synchronous `perform` must never run on the Swift-concurrency

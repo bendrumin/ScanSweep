@@ -40,6 +40,11 @@ struct ResultsView: View {
                     model.startScan()
                 }
             }
+            #if DEBUG
+            ToolbarItem(placement: .primaryAction) {
+                DiagnosticsShareButton(model: model)
+            }
+            #endif
         }
         .alert("Something went wrong", isPresented: $model.isShowingError) {
             Button("OK", role: .cancel) {}
