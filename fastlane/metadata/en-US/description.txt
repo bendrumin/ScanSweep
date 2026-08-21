@@ -1,9 +1,10 @@
-Your kids grabbed your phone. Now your camera roll has 87 photos of the carpet, a thumb, and the dog's left ear — all beautifully out of focus.
+Your kids grabbed your phone. Now your camera roll has 87 photos of the carpet, a thumb, and the dog's left ear — half of them out of focus and the rest the same shot eight times over.
 
 SnapSweep finds them in seconds, so you don't have to scroll for an hour.
 
 HOW IT WORKS
 • Scan — SnapSweep analyzes every photo right on your iPhone, scoring sharpness and exposure and using Apple's on-device intelligence to spot accidental shots.
+• Catch the repeats — when a kid holds the shutter down and fires off eight near-identical shots of the same foot, SnapSweep groups them and keeps only the sharpest one.
 • Review — flagged photos appear in one grid, sorted worst-first, with a badge explaining why each one was flagged. A strictness slider lets you tune how picky it is, and you can preview any photo full screen before deciding.
 • Clean up — delete the junk in one pass, or file it into a "SnapSweep Flagged" album to deal with later.
 

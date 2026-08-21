@@ -10,6 +10,7 @@ struct ResultsView: View {
                 flaggedCount: model.flagged.count,
                 scannedCount: model.scannedPhotoCount,
                 selectedCount: model.selectedCount,
+                hasRepeats: model.flagged.contains { $0.reasons.contains(.duplicate) },
                 sensitivity: $model.sensitivity,
                 onSelectAll: { model.selectAll() },
                 onDeselectAll: { model.deselectAll() }
@@ -52,6 +53,7 @@ struct ResultsHeader: View {
     let flaggedCount: Int
     let scannedCount: Int
     let selectedCount: Int
+    let hasRepeats: Bool
     @Binding var sensitivity: Double
     let onSelectAll: () -> Void
     let onDeselectAll: () -> Void
@@ -65,6 +67,15 @@ struct ResultsHeader: View {
                     Text("out of \(scannedCount) scanned · \(selectedCount) selected")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    // A burst shows up here as several near-identical tiles all
+                    // ticked for deletion, which reads as "it wants to delete
+                    // every copy" unless we say the best one is being held back.
+                    if hasRepeats {
+                        Label("Repeats keep the sharpest shot of each group",
+                              systemImage: "square.on.square")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Menu {

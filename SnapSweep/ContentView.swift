@@ -79,6 +79,7 @@ struct FeatureList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Flags blurry, too-dark, and junk shots", systemImage: "eye.slash")
+            Label("Groups repeat shots and keeps the best one", systemImage: "square.on.square")
             Label("Everything is analyzed on your phone", systemImage: "lock")
             Label("Deletions are recoverable for 30 days", systemImage: "arrow.uturn.backward")
         }

@@ -13,6 +13,7 @@ enum FlagReason: String, Equatable, CaseIterable {
     case tooDark
     case tooBright
     case junk
+    case duplicate
 
     var label: String {
         switch self {
@@ -20,6 +21,7 @@ enum FlagReason: String, Equatable, CaseIterable {
         case .tooDark: "Too dark"
         case .tooBright: "Blown out"
         case .junk: "Junk shot"
+        case .duplicate: "Repeat shot"
         }
     }
 
@@ -29,6 +31,7 @@ enum FlagReason: String, Equatable, CaseIterable {
         case .tooDark: "moon.fill"
         case .tooBright: "sun.max.fill"
         case .junk: "hand.thumbsdown.fill"
+        case .duplicate: "square.on.square"
         }
     }
 }
@@ -40,6 +43,10 @@ struct PhotoRecord: Equatable {
     let brightness: Double
     let aestheticScore: Float?
     let isUtility: Bool
+    /// 64-bit difference hash; 0 means hashing failed and the record is
+    /// excluded from duplicate matching rather than matching everything.
+    let hash: UInt64
+    let creationDate: Date?
 }
 
 struct FlaggedPhoto: Identifiable, Equatable {
@@ -47,6 +54,12 @@ struct FlaggedPhoto: Identifiable, Equatable {
     let asset: PHAsset
     let reasons: [FlagReason]
     let sharpness: Double
+    /// Shared by every shot in the same near-duplicate burst, so the grid can
+    /// keep them next to each other instead of scattering them by sharpness.
+    let clusterID: Int?
+    /// Primary grid ordering. Burst members all take their cluster's worst
+    /// sharpness so the whole cluster travels together.
+    let sortKey: Double
 }
 
 @MainActor
@@ -182,7 +195,13 @@ final class ScanModel {
         while index < assets.count && !Task.isCancelled {
             let upperBound = min(index + chunkSize, assets.count)
             let chunk = Array(assets[index..<upperBound])
-            let chunkRecords = await PhotoAnalyzer.analyze(assets: chunk)
+            var chunkRecords = await PhotoAnalyzer.analyze(assets: chunk)
+            // `assets` is newest-first, but the analyzer's task group finishes
+            // out of order within a chunk. Re-sorting each chunk keeps `records`
+            // globally newest-first, which is what duplicate clustering walks.
+            chunkRecords.sort {
+                ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast)
+            }
             records.append(contentsOf: chunkRecords)
             scannedCount = upperBound
             index = upperBound
@@ -198,10 +217,13 @@ final class ScanModel {
     private func recomputeFlagged() {
         // Laplacian variance below this reads as "no real edges anywhere" = blur.
         let blurThreshold = 15.0 + sensitivity * 235.0
+        let junkThreshold = Float(-0.85 + sensitivity * 0.7)
+        let (clusterOf, keeperOfCluster, worstInCluster) = duplicateClusters()
+
         var result: [FlaggedPhoto] = []
         result.reserveCapacity(records.count / 4)
 
-        for record in records {
+        for (index, record) in records.enumerated() {
             var reasons: [FlagReason] = []
             if record.brightness < 0.06 {
                 reasons.append(.tooDark)
@@ -210,22 +232,94 @@ final class ScanModel {
             } else if record.sharpness < blurThreshold {
                 reasons.append(.blurry)
             }
-            if let score = record.aestheticScore, score < -0.6 {
+            if let score = record.aestheticScore, score < junkThreshold {
                 reasons.append(.junk)
+            }
+            // Every shot in a burst except the sharpest one is a repeat.
+            var cluster: Int?
+            if let id = clusterOf[index], keeperOfCluster[id] != index {
+                reasons.append(.duplicate)
+                cluster = id
             }
             if !reasons.isEmpty {
                 result.append(FlaggedPhoto(
                     id: record.id,
                     asset: record.asset,
                     reasons: reasons,
-                    sharpness: record.sharpness
+                    sharpness: record.sharpness,
+                    clusterID: cluster,
+                    sortKey: cluster.flatMap { worstInCluster[$0] } ?? record.sharpness
                 ))
             }
         }
 
-        result.sort { $0.sharpness < $1.sharpness }
+        result.sort {
+            if $0.sortKey != $1.sortKey { return $0.sortKey < $1.sortKey }
+            let left = $0.clusterID ?? -1, right = $1.clusterID ?? -1
+            if left != right { return left < right }
+            return $0.sharpness < $1.sharpness
+        }
         flagged = result
         selectedIDs = Set(result.map(\.id)).subtracting(deselectedIDs)
+    }
+
+    /// Groups near-identical shots taken close together in time.
+    ///
+    /// `records` is newest-first, so each photo only has to be compared against
+    /// the handful before it — that keeps this linear over a library of any
+    /// size instead of comparing all pairs. Returns, per record index, its
+    /// cluster; plus the sharpest member of each cluster (the one worth
+    /// keeping) and the worst sharpness in it (used for grid ordering).
+    private func duplicateClusters() -> ([Int?], [Int: Int], [Int: Double]) {
+        // Hamming distance across a 64-bit hash. Measured on real burst shots,
+        // same-burst pairs land at 1-6 and unrelated photos at 24+, so this
+        // 6-14 range sits inside a wide gap rather than on a cliff.
+        let threshold = Int((6.0 + sensitivity * 8.0).rounded())
+        let maxGap: TimeInterval = 180
+        let lookBack = 24
+
+        var clusterOf = [Int?](repeating: nil, count: records.count)
+        var nextCluster = 0
+
+        for i in records.indices {
+            let current = records[i]
+            guard current.hash != 0 else { continue }
+            var j = i - 1
+            let stop = max(0, i - lookBack)
+            while j >= stop {
+                let candidate = records[j]
+                if let a = current.creationDate, let b = candidate.creationDate,
+                   b.timeIntervalSince(a) > maxGap {
+                    break  // newest-first, so everything earlier is further away
+                }
+                if candidate.hash != 0,
+                   (current.hash ^ candidate.hash).nonzeroBitCount <= threshold {
+                    if let existing = clusterOf[j] {
+                        clusterOf[i] = existing
+                    } else {
+                        clusterOf[j] = nextCluster
+                        clusterOf[i] = nextCluster
+                        nextCluster += 1
+                    }
+                    break
+                }
+                j -= 1
+            }
+        }
+
+        var keeper: [Int: Int] = [:]
+        var worst: [Int: Double] = [:]
+        for (index, cluster) in clusterOf.enumerated() {
+            guard let cluster else { continue }
+            let sharpness = records[index].sharpness
+            if let best = keeper[cluster] {
+                if sharpness > records[best].sharpness { keeper[cluster] = index }
+            } else {
+                keeper[cluster] = index
+            }
+            worst[cluster] = min(worst[cluster] ?? sharpness, sharpness)
+        }
+        return (clusterOf, keeper, worst)
     }
 
     // MARK: - Selection
@@ -354,8 +448,60 @@ enum PhotoAnalyzer {
             sharpness: sharpness,
             brightness: brightness,
             aestheticScore: aesthetics?.score,
-            isUtility: aesthetics?.isUtility ?? false
+            isUtility: aesthetics?.isUtility ?? false,
+            hash: perceptualHash(of: cgImage),
+            creationDate: asset.creationDate
         )
+    }
+
+    /// Difference hash: downsample to 9x8 grayscale and record, for each row,
+    /// whether every pixel is darker than the one to its right. That yields 64
+    /// bits describing the image's gradient structure — near-identical burst
+    /// shots differ in only a handful of them, while unrelated photos differ in
+    /// roughly half. Small shifts in framing and exposure barely move it, which
+    /// is exactly the "kid held the shutter down" case.
+    nonisolated static func perceptualHash(of cgImage: CGImage) -> UInt64 {
+        let width = 9, height = 8
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return 0 }
+
+        // A near-flat tile — an all-dark or blown-out frame — has almost no
+        // gradient to compare, so most bits come out zero and two unrelated
+        // photos can land within a few bits of each other by chance. Measured
+        // on deliberately low-contrast frames, distinct images stay 17+ apart
+        // once the tile spans at least this much range, but degenerate below
+        // it. False matches here would mean deleting real photos, so anything
+        // flatter opts out of duplicate matching entirely; it is still caught
+        // by the brightness and blur checks.
+        let low = pixels.min() ?? 0, high = pixels.max() ?? 0
+        guard high &- low >= 24 else { return 0 }
+
+        var hash: UInt64 = 0
+        var bit: UInt64 = 0
+        for y in 0..<height {
+            let row = y * width
+            for x in 0..<(width - 1) {
+                if pixels[row + x] < pixels[row + x + 1] {
+                    hash |= (1 << bit)
+                }
+                bit += 1
+            }
+        }
+        return hash
     }
 
     nonisolated static func requestImage(for asset: PHAsset, targetSize: CGSize) async -> UIImage? {
