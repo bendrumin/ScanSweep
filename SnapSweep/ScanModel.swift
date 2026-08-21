@@ -242,7 +242,12 @@ final class ScanModel {
     private func recomputeFlagged() {
         // Laplacian variance below this reads as "no real edges anywhere" = blur.
         let blurThreshold = 15.0 + sensitivity * 235.0
-        let junkThreshold = Float(-0.85 + sensitivity * 0.7)
+        // Vision's aesthetics score is the signal that actually separates
+        // accidental shots from wanted ones. Measured on a real library, junk
+        // (feet, floor, pocket) came back -0.33 to -0.76 while every keeper was
+        // +0.34 or better — a clean split at zero. The old -0.85..-0.15 range
+        // sat down in the negative tail and caught barely a third of the junk.
+        let junkThreshold = Float(-0.55 + sensitivity * 0.75)
         let (clusterOf, keeperOfCluster, worstInCluster) = duplicateClusters()
 
         var result: [FlaggedPhoto] = []
