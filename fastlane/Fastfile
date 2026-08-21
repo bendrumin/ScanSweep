@@ -60,6 +60,83 @@ platform :ios do
     end
   end
 
+  desc "Report the TestFlight beta groups and any public (open) join link."
+  lane :testflight_link do
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
+    app = Spaceship::ConnectAPI::App.find(
+      CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    )
+    groups = app.get_beta_groups
+    if groups.empty?
+      UI.important("No beta groups yet.")
+    end
+    groups.each do |group|
+      kind = group.is_internal_group ? "internal" : "external"
+      UI.message("#{group.name} (#{kind}) id=#{group.id}")
+      UI.message("   public link enabled: #{group.public_link_enabled.inspect}")
+      UI.message("   public link:         #{group.public_link.inspect}")
+      UI.message("   link limit:          #{group.public_link_limit.inspect}")
+    end
+    builds = Spaceship::ConnectAPI::Build.all(
+      app_id: app.id, sort: "-version", limit: 5,
+      includes: "betaAppReviewSubmission,preReleaseVersion"
+    )
+    builds.each do |build|
+      review = build.beta_app_review_submission&.beta_review_state || "not submitted"
+      UI.message("build #{build.version} — processing=#{build.processing_state} " \
+                 "beta review=#{review}")
+    end
+    UI.important("External testers can only install once a build passes Beta App Review.")
+  end
+
+  desc "Create (or reuse) an external TestFlight group with an open public join"
+  desc "link, attach the newest build, and print the URL for the website."
+  lane :testflight_public_link do
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**asc_api_key)
+    app = Spaceship::ConnectAPI::App.find(
+      CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    )
+
+    # Public links only exist on external groups; the default "Main" group is
+    # internal and can never carry one.
+    group = app.get_beta_groups.find { |g| !g.is_internal_group && g.name == "Public Beta" }
+    if group.nil?
+      UI.message("Creating external group 'Public Beta'…")
+      group = Spaceship::ConnectAPI.create_beta_group(
+        app_id: app.id,
+        group_name: "Public Beta",
+        is_internal_group: false,
+        public_link_enabled: true,
+        public_link_limit: 1_000,
+        public_link_limit_enabled: true
+      )
+    elsif !group.public_link_enabled
+      UI.message("Enabling public link on existing group…")
+      group.update(attributes: { public_link_enabled: true })
+    end
+
+    # Re-read so the generated link is present.
+    group = app.get_beta_groups.find { |g| g.id == group.id }
+
+    build = Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-version", limit: 1).first
+    if build
+      begin
+        Spaceship::ConnectAPI.add_beta_groups_to_build(
+          build_id: build.id, beta_group_ids: [group.id]
+        )
+        UI.success("Attached build #{build.version} to #{group.name}")
+      rescue => e
+        UI.important("Could not attach build #{build.version}: #{e.message}")
+      end
+    end
+
+    if group.public_link
+      UI.success("TestFlight public link: #{group.public_link}")
+    else
+      UI.important("Group created but no public link returned yet — re-run to pick it up.")
+    end
+  end
+
   desc "Delete duplicate screenshots left behind by a deliver upload retry,"
   desc "keeping one complete copy of each filename and restoring filename order."
   lane :screenshot_dedupe do

@@ -35,6 +35,24 @@ device size. deliver's upload retry can leave duplicates behind, so this
 
 is the check after any screenshot push.
 
+### ios testflight_link
+
+```sh
+[bundle exec] fastlane ios testflight_link
+```
+
+Report the TestFlight beta groups and any public (open) join link.
+
+### ios testflight_public_link
+
+```sh
+[bundle exec] fastlane ios testflight_public_link
+```
+
+Create (or reuse) an external TestFlight group with an open public join
+
+link, attach the newest build, and print the URL for the website.
+
 ### ios screenshot_dedupe
 
 ```sh

@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SnapSweep — find the accidental shots</title>
-<meta name="description" content="SnapSweep scans your iPhone photo library on-device for blurry, dark, and accidental shots — the ones the kids took — and clears them out in one pass.">
+<meta name="description" content="SnapSweep scans your iPhone photo library on-device for blurry, dark, and repeated shots — the ones the kids took — and clears them out in one pass. Free TestFlight beta.">
 <link rel="icon" href="/img/icon-180.png">
 <link rel="apple-touch-icon" href="/img/icon-180.png">
 <meta property="og:title" content="SnapSweep: Photo Cleanup">
-<meta property="og:description" content="Find every blurry, dark, and accidental photo on your iPhone — privately, on-device.">
+<meta property="og:description" content="Find every blurry, dark, and repeated photo on your iPhone — privately, on-device. Join the free TestFlight beta.">
 <meta property="og:image" content="/img/icon-512.png">
 <style>
 :root {
@@ -60,14 +60,25 @@ header.nav {
 }
 .hero .cta:hover { text-decoration: none; transform: translateY(-1px); }
 .hero .note { margin-top: 12px; font-size: .85rem; opacity: .75; }
-.shots { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; padding: 56px 0 8px; }
+/* A scroller rather than a wrapping grid: the shot count changes as the app
+   grows, and six across would break to a lopsided second row. */
+.shots {
+  display: flex; gap: 20px; padding: 56px 4px 16px;
+  overflow-x: auto; scroll-snap-type: x mandatory;
+  scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+}
 .shots img {
-  width: min(230px, 44vw); border-radius: 22px; border: 1px solid var(--border);
+  width: min(230px, 56vw); height: auto; flex: 0 0 auto; scroll-snap-align: center;
+  border-radius: 22px; border: 1px solid var(--border);
   box-shadow: 0 16px 44px rgba(40, 30, 110, .18);
 }
+/* No justify-content: center here — the row is always wider than the page, and
+   centring an overflowing flex container puts the first shot off the left edge
+   where it cannot be scrolled back to. */
+.shots-hint { text-align: center; color: var(--text-soft); font-size: .85rem; margin-top: -4px; }
 section { padding: 56px 0; }
 section h2 { font-size: 1.8rem; font-weight: 800; letter-spacing: -.01em; margin-bottom: 24px; text-align: center; }
-.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
 .feature {
   background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 22px;
 }
@@ -107,26 +118,31 @@ footer .links a { margin: 0 10px; }
   <div class="wrap">
     <img class="icon" src="/img/icon-180.png" alt="SnapSweep app icon">
     <h1>Find the accidental shots</h1>
-    <p class="sub">Your kids grabbed your phone. Now your camera roll has 87 photos of the carpet, a thumb, and the dog's left ear. SnapSweep finds every blurry, dark, and accidental photo in seconds — entirely on your iPhone.</p>
-    <a class="cta" href="#support">Coming soon to the App&nbsp;Store</a>
-    <div class="note">Currently in TestFlight beta · iOS 18+</div>
+    <p class="sub">Your kids grabbed your phone. Now your camera roll has 87 photos of the carpet, a thumb, and the dog's left ear — half out of focus, the rest the same shot eight times over. SnapSweep finds them all in seconds, entirely on your iPhone.</p>
+    <a class="cta" href="https://testflight.apple.com/join/P4pFs1VX">Join the TestFlight beta</a>
+    <div class="note">Free while in beta · iOS 18+ · Requires the TestFlight app</div>
   </div>
 </div>
 
 <div class="wrap">
   <div class="shots">
-    <img src="/img/01_idle.jpg" alt="SnapSweep home screen">
-    <img src="/img/02_results.jpg" alt="Results grid showing flagged blurry photos">
-    <img src="/img/03_preview.jpg" alt="Full-screen photo preview with reason badge">
-    <img src="/img/04_album.jpg" alt="Photos filed safely to an album">
+    <img src="/img/01_idle.jpg" width="460" height="1000" loading="lazy" alt="SnapSweep home screen">
+    <img src="/img/02_scanning.jpg" width="460" height="1000" loading="lazy" alt="Scan in progress showing a progress ring and the worst finds so far">
+    <img src="/img/03_results.jpg" width="460" height="1000" loading="lazy" alt="Results grid showing flagged blurry photos">
+    <img src="/img/04_preview.jpg" width="460" height="1000" loading="lazy" alt="Full-screen photo preview with reason badge">
+    <img src="/img/05_album.jpg" width="460" height="1000" loading="lazy" alt="Photos filed safely to an album">
+    <img src="/img/06_dashboard.jpg" width="460" height="1000" loading="lazy" alt="Dashboard showing space freed and last scan totals">
   </div>
+  <p class="shots-hint">Scroll for more screens →</p>
 
   <section id="features">
     <h2>Sweep the junk, keep the memories</h2>
     <div class="features">
       <div class="feature"><span class="emoji">🔍</span><h3>Finds the junk for you</h3><p>Every photo is scored for sharpness and exposure, with Apple's on-device intelligence spotting accidental shots. No more endless scrolling.</p></div>
-      <div class="feature"><span class="emoji">🏷️</span><h3>A reason for every flag</h3><p>Blurry, too dark, blown out — each flagged photo wears a badge explaining why, sorted worst-first. A strictness slider tunes how picky it is.</p></div>
+      <div class="feature"><span class="emoji">🧬</span><h3>Catches the repeats</h3><p>Hold the shutter down and you get eight near-identical shots of the same foot. SnapSweep groups them on-device and keeps only the sharpest — the rest are one tap from gone.</p></div>
+      <div class="feature"><span class="emoji">🏷️</span><h3>A reason for every flag</h3><p>Blurry, too dark, blown out, repeat shot — each flagged photo wears a badge explaining why, sorted worst-first. A strictness slider tunes how picky it is.</p></div>
       <div class="feature"><span class="emoji">🛟</span><h3>Safety nets built in</h3><p>Deletions go through the iOS system confirmation and sit in Recently Deleted for 30 days. Or skip deleting entirely and file flags to an album.</p></div>
+      <div class="feature"><span class="emoji">⚡</span><h3>Built for a real camera roll</h3><p>Thousands of photos, analysed in batches with live progress and a running count of what it has found. Stop early and keep everything found so far.</p></div>
       <div class="feature"><span class="emoji">🔒</span><h3>Private by design</h3><p>All analysis happens on your device. No account, no ads, no analytics, no network calls. Your photos never leave your phone.</p></div>
     </div>
   </section>
@@ -137,6 +153,14 @@ footer .links a { margin: 0 10px; }
       <details>
         <summary>Does SnapSweep upload my photos anywhere?</summary>
         <p>No. Analysis runs entirely on your iPhone using Apple's frameworks. SnapSweep makes no network requests at all — see the <a href="/privacy">privacy policy</a>.</p>
+      </details>
+      <details>
+        <summary>How do I join the beta?</summary>
+        <p>Install Apple's free <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> app, then open the <a href="https://testflight.apple.com/join/P4pFs1VX">SnapSweep beta link</a> on your iPhone. Betas expire every 90 days; you'll get a new build before then.</p>
+      </details>
+      <details>
+        <summary>If it finds ten copies of the same shot, does it delete them all?</summary>
+        <p>No. Repeats are grouped and the sharpest one in each group is kept and never flagged — only the extras are offered up for deletion. The results screen says so above the grid.</p>
       </details>
       <details>
         <summary>What if it flags a photo I want to keep?</summary>
@@ -158,6 +182,7 @@ footer .links a { margin: 0 10px; }
 <footer>
   <div class="wrap">
     <div class="links">
+      <a href="https://testflight.apple.com/join/P4pFs1VX">Join the beta</a> ·
       <a href="/privacy">Privacy Policy</a> ·
       <a href="https://github.com/bendrumin/ScanSweep">GitHub</a> ·
       <a href="https://chorestar.app">ChoreStar</a>
