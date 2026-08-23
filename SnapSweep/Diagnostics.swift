@@ -42,7 +42,7 @@ enum Diagnostics {
             }
         }
 
-        var lines = ["index,id,created,width,height,brightness,dynamicRange,sharpness,aesthetic,isUtility,hasPrint,nearestDist,nearestIdx,nearestGapSec,cluster,reasons"]
+        var lines = ["index,id,created,width,height,brightness,dynamicRange,sharpness,aesthetic,isUtility,hasFace,hasPrint,nearestDist,nearestIdx,nearestGapSec,cluster,reasons"]
         lines.reserveCapacity(records.count + 1)
 
         for (index, record) in records.enumerated() {
@@ -60,6 +60,7 @@ enum Diagnostics {
                 String(format: "%.2f", record.sharpness),
                 aesthetic,
                 record.isUtility ? "1" : "0",
+                record.hasFace ? "1" : "0",
                 record.featurePrint == nil ? "0" : "1",
                 nearest[index].map { String(format: "%.4f", $0.distance) } ?? "",
                 nearest[index].map { String($0.index) } ?? "",

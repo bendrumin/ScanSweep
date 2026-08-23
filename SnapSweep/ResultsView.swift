@@ -15,6 +15,13 @@ struct ResultsView: View {
                 onSelectAll: { model.selectAll() },
                 onDeselectAll: { model.deselectAll() }
             )
+            if model.reasonCounts.count > 1 {
+                ReasonFilterRow(
+                    totalCount: model.flagged.count,
+                    counts: model.reasonCounts,
+                    selection: $model.reasonFilter
+                )
+            }
             if let summary = model.lastActionSummary {
                 ActionSummaryBanner(text: summary)
             }
@@ -107,6 +114,67 @@ struct ResultsHeader: View {
     }
 }
 
+struct ReasonFilterRow: View {
+    let totalCount: Int
+    let counts: [ReasonCount]
+    @Binding var selection: FlagReason?
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                FilterChip(
+                    label: "All",
+                    symbol: nil,
+                    count: totalCount,
+                    isOn: selection == nil
+                ) { selection = nil }
+                ForEach(counts) { entry in
+                    FilterChip(
+                        label: entry.reason.label,
+                        symbol: entry.reason.symbol,
+                        count: entry.count,
+                        isOn: selection == entry.reason
+                    ) { selection = entry.reason }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .background(.bar)
+    }
+}
+
+struct FilterChip: View {
+    let label: String
+    let symbol: String?
+    let count: Int
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                Text(label)
+                Text("\(count)")
+                    .opacity(0.6)
+            }
+            .font(.caption)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary),
+                in: Capsule()
+            )
+            .foregroundStyle(isOn ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct ActionSummaryBanner: View {
     let text: String
 
@@ -142,7 +210,7 @@ struct FlaggedGrid: View {
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 2) {
-                ForEach(model.flagged) { photo in
+                ForEach(model.visibleFlagged) { photo in
                     FlaggedCell(
                         asset: photo.asset,
                         reasons: photo.reasons,
