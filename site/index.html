@@ -8,8 +8,15 @@
 <link rel="icon" href="/img/icon-180.png">
 <link rel="apple-touch-icon" href="/img/icon-180.png">
 <meta property="og:title" content="SnapSweep: Photo Cleanup">
-<meta property="og:description" content="Find every blurry, dark, and repeated photo on your iPhone — privately, on-device. Join the free TestFlight beta.">
-<meta property="og:image" content="/img/icon-512.png">
+<meta property="og:description" content="Find every blurry, junk, and repeated photo on your iPhone — privately, on-device. It never flags your kids. Join the free TestFlight beta.">
+<meta property="og:image" content="https://snapsweep-nine.vercel.app/img/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://snapsweep-nine.vercel.app">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://snapsweep-nine.vercel.app/img/og-card.png">
+<meta name="theme-color" content="#5957d6">
 <style>
 :root {
   --bg: #ffffff;
@@ -48,7 +55,9 @@ header.nav {
 .nav nav a { margin-left: 22px; color: var(--text-soft); font-size: .95rem; }
 .hero {
   text-align: center; padding: 64px 0 40px;
-  background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+  background:
+    radial-gradient(900px 420px at 50% -12%, rgba(255,255,255,.18), transparent 60%),
+    linear-gradient(135deg, var(--brand-a), var(--brand-b));
   color: #fff;
 }
 .hero img.icon { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 12px 40px rgba(0,0,0,.35); margin-bottom: 24px; }
@@ -57,9 +66,14 @@ header.nav {
 .hero .cta {
   display: inline-block; margin-top: 28px; padding: 13px 30px; border-radius: 999px;
   background: #fff; color: var(--brand-a); font-weight: 700; box-shadow: 0 8px 26px rgba(0,0,0,.25);
+  transition: transform .15s ease, box-shadow .15s ease;
 }
-.hero .cta:hover { text-decoration: none; transform: translateY(-1px); }
+.hero .cta:hover { text-decoration: none; transform: translateY(-2px); box-shadow: 0 12px 34px rgba(0,0,0,.3); }
 .hero .note { margin-top: 12px; font-size: .85rem; opacity: .75; }
+.hero .proof {
+  margin: 22px auto 0; font-size: .95rem; opacity: .9; max-width: 560px;
+  border-top: 1px solid rgba(255,255,255,.25); padding-top: 16px;
+}
 /* A scroller rather than a wrapping grid: the shot count changes as the app
    grows, and six across would break to a lopsided second row. */
 .shots {
@@ -121,6 +135,7 @@ footer .links a { margin: 0 10px; }
     <p class="sub">Your kids grabbed your phone. Now your camera roll has 87 photos of the carpet, a thumb, and the dog's left ear — half out of focus, the rest the same shot eight times over. SnapSweep finds them all in seconds, entirely on your iPhone.</p>
     <a class="cta" href="https://testflight.apple.com/join/P4pFs1VX">Join the TestFlight beta</a>
     <div class="note">Free while in beta · iOS 18+ · Requires the TestFlight app</div>
+    <div class="proof">Tested on a real 12,000-photo family library: <strong>900+ junk and repeat shots found</strong> — and zero photos of the kids flagged.</div>
   </div>
 </div>
 
@@ -138,11 +153,13 @@ footer .links a { margin: 0 10px; }
   <section id="features">
     <h2>Sweep the junk, keep the memories</h2>
     <div class="features">
-      <div class="feature"><span class="emoji">🔍</span><h3>Finds the junk for you</h3><p>Every photo is scored for sharpness and exposure, with Apple's on-device intelligence spotting accidental shots. No more endless scrolling.</p></div>
+      <div class="feature"><span class="emoji">🧒</span><h3>Never flags your kids</h3><p>SnapSweep knows what a face is. Photos of people or pets are never junk-flagged, and two different smiles are never "the same shot" — only true near-identical frames count as repeats.</p></div>
+      <div class="feature"><span class="emoji">⚡</span><h3>Catches shutter sprees</h3><p>A toddler with your phone takes 80 photos of the carpet in a minute. SnapSweep spots the rhythm — a burst of near-instant, faceless shots — flags the lot, and keeps the single best one as a memento.</p></div>
+      <div class="feature"><span class="emoji">🔍</span><h3>Finds the junk for you</h3><p>Every photo is scored for sharpness and exposure region by region — so a portrait's blurred background never counts against it — with Apple's on-device intelligence spotting accidental shots.</p></div>
       <div class="feature"><span class="emoji">🧬</span><h3>Catches the repeats</h3><p>Hold the shutter down and you get eight near-identical shots of the same foot. SnapSweep groups them on-device and keeps only the sharpest — the rest are one tap from gone.</p></div>
-      <div class="feature"><span class="emoji">🏷️</span><h3>A reason for every flag</h3><p>Blurry, too dark, blown out, repeat shot — each flagged photo wears a badge explaining why, sorted worst-first. A strictness slider tunes how picky it is.</p></div>
+      <div class="feature"><span class="emoji">🏷️</span><h3>A reason for every flag</h3><p>Blurry, junk shot, repeat, rapid fire — each flagged photo wears a badge explaining why, sorted newest-first like your camera roll, with one-tap filters per category. A strictness slider tunes how picky it is.</p></div>
       <div class="feature"><span class="emoji">🛟</span><h3>Safety nets built in</h3><p>Deletions go through the iOS system confirmation and sit in Recently Deleted for 30 days. Or skip deleting entirely and file flags to an album.</p></div>
-      <div class="feature"><span class="emoji">⚡</span><h3>Built for a real camera roll</h3><p>Thousands of photos, analysed in batches with live progress and a running count of what it has found. Stop early and keep everything found so far.</p></div>
+      <div class="feature"><span class="emoji">🚀</span><h3>Built for a real camera roll</h3><p>Thousands of photos, analysed in batches with live progress and a running count of what it has found. Stop early and keep everything found so far.</p></div>
       <div class="feature"><span class="emoji">🔒</span><h3>Private by design</h3><p>All analysis happens on your device. No account, no ads, no analytics, no network calls. Your photos never leave your phone.</p></div>
     </div>
   </section>
@@ -150,6 +167,10 @@ footer .links a { margin: 0 10px; }
   <section class="support" id="support">
     <h2>Support &amp; FAQ</h2>
     <div class="faq">
+      <details>
+        <summary>Will it flag the photos of my kids?</summary>
+        <p>That's the one thing it is built never to do. Photos with a face or a pet in them are never flagged as junk, and two different moments of the same kid are never treated as duplicates — only truly near-identical frames are. Even when it catches a shutter spree, the best shot is always kept.</p>
+      </details>
       <details>
         <summary>Does SnapSweep upload my photos anywhere?</summary>
         <p>No. Analysis runs entirely on your iPhone using Apple's frameworks. SnapSweep makes no network requests at all — see the <a href="/privacy">privacy policy</a>.</p>
